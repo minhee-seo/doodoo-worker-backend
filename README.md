@@ -5,24 +5,15 @@
 >  대규모 데이터의 검색 노출(SEO)을 엔지니어링 관점에서 해결하는 데 집중했습니다.
 
 
----
+## 🚀 DEMO
 
-## 🪄 주요 기능
-
-- **갤러리 페이지**: 카테고리(사진·일러스트·템플릿·아이콘·스티커)별 필터링과 키워드 검색
-- **상세 페이지**: 이미지 메타데이터, 태그, 유사 이미지 추천
-- **다운로드**: 해상도별 옵션 선택 → Signed URL을 통한 안전한 원본 제공
-- **반응형 디자인**: 모바일·태블릿·데스크톱 전 해상도 대응
-- **관리자 페이지**: 대량 이미지 업로드, 메타데이터 관리, 파일 삭제
-
-## 🚀 배포 링크
-
-**👉 [https://www.doodoostock.com/](https://www.doodoostock.com/)**
 <img width="1285" height="742" alt="Image" src="https://github.com/user-attachments/assets/f8dd1852-0204-4378-8a07-17e38655dfce" />
 <img width="1257" height="762" alt="Image" src="https://github.com/user-attachments/assets/ec8c28c0-cd07-4b0b-aab1-1504f9041cac" />
+**서비스 링크**: [https://www.doodoostock.com/](https://www.doodoostock.com/)
+
 ---
 
-## 🛠️ 기술 스택
+## 기술 스택
 
 | 영역 | 기술 |
 |------|------|
@@ -34,175 +25,214 @@
 | **Deploy** | Vercel (Frontend), Cloudflare (Backend/Storage) |
 | **Optimization** | React Compiler (Babel Plugin) |
 
-### 기술 선택 이유
-
-- **Cloudflare Workers**: 고정 서버비 없이 요청량 비례 과금. 전 세계 엣지에서 실행되어 API 응답 지연 최소화
-- **Supabase + R2 분리**: 이미지 메타데이터는 관계형 DB(Supabase)로 무결성 보장, 대용량 바이너리는 R2 오브젝트 스토리지로 비용 최적화
-- **Next.js**: SEO가 핵심인 이미지 플랫폼 특성상 SSR/SSG/ISR을 유연하게 선택할 수 있는 하이브리드 렌더링이 필요했음
-
 ---
 
-## 📂 프로젝트 구조
-
-```text
-src/
-├── app/
-│   ├── (site)/          # 공개 페이지 (Route Group)
-│   │   ├── list/        # 갤러리 & 검색 결과
-│   │   └── [id]/        # 이미지 상세 페이지
-│   ├── (admin)/admin/   # 보호된 관리자 영역
-│   └── page.tsx         # 랜딩 페이지
-├── components/
-│   ├── common/          # Header, Footer, SearchBar, Pagination
-│   ├── admin/           # 관리자 전용 UI
-│   └── home/            # HeroSection, Three.js Ballpit
-├── hooks/               # useFileGrouper (파일 그루핑 로직)
-├── lib/
-│   └── api.ts           # 모든 API 호출 집중화
-├── styles/
-│   ├── base/            # 변수, 폰트, 믹스인, 리셋
-│   └── components/      # 컴포넌트별 SCSS 모듈
-└── types/               # TypeScript 타입 정의
-```
-
-**구조 설계 배경**
-
-과거 프로젝트에서 모호한 컨벤션으로 인해 구조 파악과 협업에 어려움을 겪었습니다. 이를 개선하고자 이번에는 관심사 분리(SoC) 원칙에 따라 디렉토리 구조와 규칙을 먼저 설계했습니다.
-
----
-
-## 🔍 기술적 도전과 해결 과정
-
-### 1. 검색 엔진 최적화(SEO) 및 대규모 동적 페이지 인덱싱
-
-**문제 상황**
-
-수만 장의 이미지 상세 페이지가 검색 엔진에 개별적으로 노출되지 않으면 서비스 유입이 거의 없을 것이라는 걸 알고 있었지만, 처음엔 CSR 방식으로 개발을 시작했습니다. 검색 봇이 JavaScript 실행 전 빈 HTML을 먼저 읽는다는 것을 직접 확인하고 나서야 문제를 실감했습니다.
-
-**원인 분석**
-
-- CSR 방식은 JS 실행 이후 데이터를 불러오므로, 크롤러가 이미지 제목·태그 정보를 읽기 전에 빈 페이지를 수집
-- 각 이미지 페이지마다 고유한 메타데이터가 없어 소셜 공유 시 미리보기 없음
-
-**해결 방법**
-
-1. `generateMetadata` 함수로 DB의 이미지 메타데이터(Title, Description, Tags)를 서버에서 생성해 페이지마다 고유한 Open Graph, Twitter Card를 동적으로 주입
-2. `robots.ts`, `sitemap.xml`을 Next.js App Router 기반으로 동적 생성하여 Google Search Console에 제출
-
-**결과 및 개선 방향**
-
-- Lighthouse SEO 점수 100점 달성
-- 소셜 공유 시 이미지별 커스텀 미리보기 정상 노출 확인
-- 현재 Google Search Console로 색인 현황을 모니터링 중. 아직 대부분의 페이지가 색인 대기 상태라 실제 유입 증가 효과는 추적 중
-
----
-
-### 2. 방대한 스톡 데이터 관리
-
-**문제 상황**
-
-수만 장의 스톡 이미지를 한 버킷에 그냥 올려두면 R2 퍼블릭 버킷의 엔드포인트가 그대로 노출되고, 원본 이미지까지 무제한 접근 가능해지는 구조였습니다. 비용과 보안 두 가지 문제가 동시에 있었습니다.
-
-**해결 방법**
-
-이미지를 접근 성격에 따라 두 가지로 분류했습니다.
-
-| 구분 | 저장 위치 | 용도 |
-|------|-----------|------|
-| 썸네일, 미리보기 | R2 Public Bucket | 갤러리·상세 페이지 노출용 |
-| 원본 스톡 | R2 Private Bucket | 다운로드 전용 (인증 후 접근) |
-
-퍼블릭 버킷의 경우 R2 기본 엔드포인트(`*.r2.dev`) 대신 **서브도메인**을 연결해 실제 스토리지 구조가 외부에 노출되지 않도록 했습니다.
-
-**결과 및 개선 방향**
-
-- 원본 이미지 무단 접근 경로 차단
-- 퍼블릭 버킷의 스토리지 구조 은닉으로 직접 URL 스캔 공격 방어
-- 현재 버킷 분리는 되어 있지만, 퍼블릭 버킷에 대한 핫링킹(외부 사이트에서 이미지 URL을 직접 사용하는 행위) 제한은 아직 미구현 상태. Cloudflare WAF 규칙 적용을 검토 중
-
----
-
-### 3. 스톡 데이터 보안 설계
-
-**문제 상황**
-
-원본 스톡 이미지는 프라이빗 버킷에 저장했지만, 다운로드 기능을 구현하려면 클라이언트가 어떤 방식으로든 파일에 접근해야 합니다. 다운로드 URL을 클라이언트에 직접 노출하면 해당 URL을 외부에서 반복 사용하거나 크롤링하는 것을 막을 수 없었습니다.
-
-**해결 방법**
-
-다운로드 요청 시 클라이언트가 R2에 직접 접근하지 않고, **Cloudflare Workers를 거쳐 Signed URL을 발급받는 구조**로 설계했습니다.
+## 아키텍처
 
 ```
-클라이언트 → Workers API 요청 → R2 Signed URL 생성 (유효시간 제한) → 클라이언트에 전달 → R2 직접 다운로드
+Client (Next.js / Vercel)
+        │
+        ▼
+Cloudflare Workers  ─── PUBLIC_ASSETS (R2)   ← 썸네일 · 프리뷰 (CDN 공개)
+        │           ─── PRIVATE_ORIGINALS (R2) ← 원본 파일 (Presigned URL 전용)
+        │           ─── VIEW_COUNT_KV          ← 조회수 버퍼 (10분 배치 플러시)
+        │
+        ▼
+Supabase (PostgreSQL)
 ```
 
-- Signed URL은 유효시간이 지나면 무효화되어 URL 재사용 불가
-- Workers 단에서 허용된 도메인(Referer 검증)에서만 요청을 수락하도록 제한
-
-**결과 및 개선 방향**
-
-- R2 원본 URL 미노출로 엔드포인트 악용 방지
-- 허용된 도메인 외부에서의 직접 다운로드 차단
-- 현재는 만료 시간만 설정된 단순한 Signed URL 구조. 추후 사용자 세션 기반 일회성 토큰으로 고도화해 동일 URL의 다중 다운로드까지 제한할 계획
+요청 흐름: `src/index.ts` (라우팅 + CORS) → `src/handlers/` (엔드포인트별 핸들러) → `src/lib/` · `src/utils/` (Supabase 클라이언트, 인증 미들웨어) → Supabase / R2
 
 ---
 
-### 4. API 호출 최소화와 캐싱 전략
+## 트러블슈팅
 
-**문제 상황**
-
-이미지 플랫폼 특성상 갤러리 한 페이지에 최소 30개의 이미지가 노출되고, 검색·필터링·페이지네이션마다 API를 호출합니다. 사용자가 늘거나 봇 트래픽이 증가하면 Cloudflare Workers API 호출 비용이 선형으로 늘어나는 구조였습니다. 무료 플랜 한도를 생각하면 캐싱 전략이 필수였습니다.
-
-**공부한 내용**
-
-Next.js App Router의 `fetch()` 는 기본적으로 응답을 캐싱합니다. 동일 요청이 한 렌더링 사이클에서 여러 번 호출되어도 중복 요청이 발생하지 않는 **Request Memoization** 동작 방식을 이해하고, 페이지 유형별로 `revalidate` 값을 다르게 설정하는 전략을 세웠습니다.
-
-**해결 방법**
-
-| 페이지 유형 | 렌더링 방식 | 캐싱 전략 |
-|-------------|-------------|-----------|
-| 이미지 상세 페이지 | ISR | `revalidate: 86400` (24시간, 데이터 변경이 드묾) |
-| 검색 결과 1페이지 | SSR | 요청마다 최신 결과 보장, `no-store` |
-| 검색 결과 2페이지~ | CSR | 브라우저 캐시 + 뒤로가기 시 재요청 없음 |
-| 관리자 페이지 | CSR | 캐싱 없이 항상 최신 상태 유지 |
-
-**결과 및 개선 방향**
-
-- 상세 페이지 반복 접근 시 Cloudflare Workers API 호출 없이 CDN 캐시에서 응답
-- 검색 결과 페이지네이션에서 불필요한 중복 호출 제거
-- 현재는 시간 기반 revalidate만 사용 중. 관리자가 이미지를 수정했을 때 즉시 반영되도록 `revalidatePath` / `revalidateTag`를 활용한 온디맨드 캐시 무효화를 적용할 계획
+단순히 동작하는 코드를 만드는 것보다, **왜 이 방식을 선택했는지** 를 설명하는 것이 더 중요하다고 생각해서 주요 문제들을 정리했습니다.
 
 ---
 
-### 5. SSR과 CSR 하이브리드 렌더링
+### 1. 원본 파일 보안 — R2 버킷을 두 개로 나눈 이유
 
-**문제 상황**
+**문제**: 처음엔 R2 버킷 하나에 모든 파일을 올리고 공개(public) 설정을 했습니다. 그런데 원본 고해상도 파일까지 URL만 알면 누구든 무제한으로 다운로드할 수 있다는 걸 뒤늦게 깨달았습니다. 광고 클릭 없이 원본을 가져가면 수익 모델 자체가 무너집니다.
 
-Next.js App Router를 처음 써보면서 가장 헷갈렸던 부분입니다. 대학에서 SSR과 CSR을 이론으로만 배웠는데, 실제로 어떤 컴포넌트를 서버 컴포넌트로 두고 어떤 것을 `'use client'`로 분리할지 기준이 없었습니다. 처음엔 익숙한 방식대로 모든 것을 CSR로 만들었다가, SEO와 초기 로딩 성능이 나빠지는 것을 직접 확인하고 나서 렌더링 전략을 전면 재설계했습니다.
+**공부한 것**: S3-compatible 스토리지의 Presigned URL 개념을 처음 접했습니다. "특정 사용자에게, 특정 파일에 대해, 특정 시간 동안만 유효한 URL을 발급"하는 방식입니다. Cloudflare R2는 AWS S3 호환 API를 지원하기 때문에 `@aws-sdk/s3-request-presigner` 를 그대로 사용할 수 있었습니다.
 
-**적용 기준**
+**해결**: 버킷을 두 개로 분리했습니다.
 
-> "외부로 보여야 하는 콘텐츠는 서버, 사용자 반응에 따라 달라지는 것은 클라이언트"
+```
+PUBLIC_ASSETS     → 썸네일 · 프리뷰 이미지 (CDN 직접 서빙, 공개)
+PRIVATE_ORIGINALS → 원본 파일 (비공개, Presigned URL로만 접근)
+```
 
-| 구분 | 적용 페이지/컴포넌트 | 이유 |
-|------|----------------------|------|
-| **SSR/ISR** | 상세 페이지, 검색 결과 1페이지, 메타데이터 | 크롤러가 읽어야 하는 콘텐츠, 초기 로딩 성능 |
-| **CSR** | 다운로드 버튼, 검색 결과 2페이지~, 관리자 전체 | 사용자 인터랙션 필수, SEO 불필요 |
+`/api/download` 엔드포인트에서 DB로 파일 경로를 확인한 뒤, 유효 시간 1시간의 Presigned URL을 생성해 클라이언트에 반환합니다.
 
-상세 페이지의 경우 이미지 미리보기와 메타데이터는 SSR로 렌더링하고, 다운로드 버튼만 `'use client'` 컴포넌트로 분리했습니다. 검색 결과는 첫 페이지만 SSR로 제공하고 이후 페이지는 CSR 방식으로 처리해 불필요한 서버 렌더링 비용을 줄였습니다.
+```typescript
+// src/handlers/download.ts
+const presignedUrl = await getSignedUrl(s3Client, command, {
+  expiresIn: 3600,
+});
+```
 
-**결과 및 개선 방향**
-
-- 검색 엔진 크롤러가 수집해야 하는 콘텐츠의 정상 색인 확인
-- 첫 번째 페이지 FCP(First Contentful Paint) 개선
-- 아직 미흡한 부분: 검색 결과 1페이지와 2페이지 간의 UX 전환이 어색함 (SSR → CSR 전환 시 레이아웃 시프트). `loading.tsx`와 스켈레톤 UI를 보완할 예정
+**현재 고민**: 1시간이라는 만료 시간이 적절한지 아직 확신이 없습니다. 너무 짧으면 다운로드 도중 만료될 수 있고, 너무 길면 URL 공유로 우회될 수 있습니다. 실사용 데이터를 보면서 조정할 계획입니다.
 
 ---
 
-## 🤔 개발하면서 느낀 점
+### 2. 조회수 집계 — DB를 직접 찌르지 않는 이유
 
-처음으로 실제 운영을 목표로 만든 프로젝트입니다. 이전까지는 "돌아가면 완성"이었는데, 이번엔 비용이 얼마나 나올지, 누가 원본 이미지를 훔쳐가면 어떻게 막을지, 트래픽이 갑자기 늘면 어떻게 될지를 고민하며 개발해야 했습니다.
+**문제**: 이미지 상세 페이지 진입 시마다 Supabase에 `UPDATE images SET views = views + 1` 을 날렸습니다. 트래픽이 적을 땐 문제없었는데, 동시 요청이 몰리면 DB 커넥션이 병목이 될 것이 뻔했습니다. 또 새로고침이나 크롤러가 조회수를 뻥튀기하는 문제도 있었습니다.
 
-가장 크게 배운 건 **설계를 먼저 하고 코드를 나중에 쓰는 습관**입니다. 버킷을 처음부터 두 개로 나눈 덕분에 보안 문제를 초반에 잡을 수 있었고, 렌더링 전략을 미리 정해두니 기능 추가 때 어디를 건드려야 할지 명확했습니다. 반대로 SSR/CSR 경계는 처음에 고민 없이 짰다가 나중에 전면 재작업했는데, 설계 단계에서 더 신중했어야 했다고 느꼈습니다.
+**공부한 것**: "Write Buffer + Batch Flush" 패턴을 공부했습니다. Redis나 KV 같은 인메모리 저장소에 카운터를 쌓다가 주기적으로 DB에 한 번에 반영하는 방식입니다. Cloudflare에는 KV 네임스페이스가 있고, Workers Cron Trigger로 주기적 실행이 가능하다는 걸 알게 됐습니다.
 
-아직 실제 유입이 많지 않아 캐싱 효과나 보안 설계의 효과를 정량적으로 측정하지 못한 부분이 아쉽습니다. Google Search Console 데이터가 쌓이는 대로 SEO 효과를, Cloudflare Analytics로 캐시 히트율을 추적해나갈 계획입니다.
+**해결**: 3단계로 구성했습니다.
+
+1. **쿠키 중복 방지**: `viewed_{imageId}` 쿠키를 24시간 TTL로 발급해 같은 클라이언트의 중복 카운트를 차단합니다.
+2. **KV 버퍼**: 쿠키가 없는 새 방문자의 조회수를 `VIEW_COUNT_KV`에 적립합니다.
+3. **배치 플러시**: 10분 간격 Cron이 KV의 모든 카운터를 읽어 Supabase RPC(`increment_image_view_count`)를 호출하고 KV를 비웁니다.
+
+실제 요청마다 실행되는 `handleViewIncrement.ts`가 쿠키 확인 → KV 적립 → 응답 쿠키 세팅을 담당합니다.
+
+```typescript
+// src/handlers/handleViewIncrement.ts — 요청마다 실행
+const cookieName = `viewed_${id}`;
+if (request.headers.get('Cookie')?.includes(cookieName)) {
+  return; // 24시간 내 재방문 → KV 적립 없이 스킵
+}
+
+// DB 대신 KV에 카운트 1 적립 (메모리 기반, 비용 최소)
+const key = `view_count:${id}`;
+const current = parseInt(await env.VIEW_COUNT_KV.get(key) || '0', 10);
+await env.VIEW_COUNT_KV.put(key, (current + 1).toString());
+
+// 쿠키 발급으로 24시간 중복 카운트 차단
+headers.set('Set-Cookie', `${cookieName}=true; Max-Age=86400; HttpOnly; Path=/`);
+```
+
+10분마다 Cron이 이 KV 데이터를 DB로 일괄 반영합니다.
+
+```
+// wrangler.jsonc
+"triggers": { "crons": ["*/10 * * * *"] }
+```
+
+```typescript
+// src/handlers/handleBatchUpdate.ts — 10분마다 실행
+const keys = await kv.list({ prefix: 'view_count:' });
+for (const key of keys.keys) {
+  const count = await kv.get(key.name);
+  await supabase.rpc('increment_image_view_count', {
+    p_image_id: imageId,
+    p_increment_by: Number(count),
+  });
+  await kv.delete(key.name);
+}
+```
+
+**현재 고민**: 서버가 Cron 실행 도중 KV에 새 카운트가 들어오면 그 사이 값이 유실될 수 있습니다. 지금은 허용 가능한 오차로 보고 넘기고 있는데, 나중에 `list` → `get` 사이에 원자성을 보장하는 방법을 찾아볼 생각입니다.
+
+---
+
+### 3. 관리자 인증 — JWT를 직접 검증하는 구조
+
+**문제**: 관리자 기능(이미지 업로드·수정·삭제)을 만들면서 인증을 어떻게 처리할지 고민했습니다. Supabase Auth를 그대로 쓰면 편하지만, Workers 엣지 환경에서 매 요청마다 Supabase 세션을 조회하면 레이턴시가 붙습니다.
+
+**공부한 것**: JWT(JSON Web Token)의 자가 검증(self-contained) 특성을 공부했습니다. 서버가 토큰을 서명하면, 이후 요청마다 DB를 조회하지 않고 서명만 검증해도 인증이 됩니다. Supabase JWT는 `SUPABASE_JWT_SECRET`으로 검증할 수 있습니다.
+
+**해결**: 두 단계 검증을 적용했습니다.
+
+1. Bearer 토큰을 Supabase Auth API로 검증 (`/auth/v1/user`)
+2. 응답에서 이메일을 꺼내 화이트리스트와 대조하거나, DB `profiles.role`을 조회
+
+```typescript
+// src/lib/auth.ts
+const { data: { user } } = await supabase.auth.getUser(token);
+const isAdmin = ADMIN_WHITELIST.includes(user.email) || profile.role === 'admin';
+```
+
+관리자를 추가할 때 화이트리스트를 수정하지 않아도 되도록 DB role 방식도 병행하고 있습니다.
+
+**현재 고민**: 화이트리스트가 코드에 하드코딩되어 있어서 관리자를 추가하려면 재배포가 필요합니다. 환경 변수 또는 DB 단일화로 정리할 예정입니다.
+
+---
+
+### 4. SEO — 서버리스 환경에서 사이트맵 생성
+
+**문제**: 스톡 이미지 서비스에서 SEO는 핵심입니다. 그런데 이미지가 계속 추가되므로 사이트맵을 정적 파일로 관리하기 어렵습니다. Next.js의 `app/sitemap.ts`에서 빌드 타임에 생성하면 최신 이미지가 반영되지 않는 문제가 있었습니다.
+
+**해결**: `/api/sitemap-data` 엔드포인트를 Workers에 추가해 Supabase에서 전체 이미지 목록을 실시간으로 제공하고, Next.js 사이트맵 생성 함수가 이 엔드포인트를 호출하도록 했습니다.
+
+```typescript
+// src/handlers/sitemapData.ts
+const { data } = await supabase
+  .from('images')
+  .select('id, uploaded_at, preview_url');
+```
+
+---
+
+### 5. 관리자 API 라우팅 — 관문(Gatekeeper) 패턴으로 권한을 일괄 보호한 이유
+
+**문제**: 관리자 엔드포인트가 늘어날수록 각 핸들러마다 인증 코드를 붙이면 빠뜨릴 여지가 생깁니다. 나중에 인증 방식을 바꿔야 할 때 수정 범위도 넓어집니다.
+
+**해결**: `src/index.ts`에서 `/admin/*` 경로를 한 곳에서 가로채 JWT를 검증하고, 통과한 요청만 각 핸들러로 넘기는 관문 구조를 만들었습니다. 로그인 엔드포인트(`/admin/auth POST`) 하나만 예외로 두고, 나머지는 전부 이 관문을 통과해야 합니다.
+
+```
+/admin/* 요청 수신
+    ↓
+pathname === '/admin/auth' && POST?
+    ├─ Yes → 검증 없이 handleAdminAuth()  (로그인 자체는 예외)
+    └─ No  → Authorization: Bearer <token> 헤더 확인
+                ├─ 없음 → 401 인증 필요
+                └─ 있음 → verifyAdminToken() 호출
+                            ├─ 실패 → 403 권한 없음
+                            └─ 성공 → 각 관리자 핸들러 실행
+```
+
+```typescript
+// src/index.ts — 관리자 미들웨어 (일부 발췌)
+if (url.pathname.startsWith('/admin')) {
+  if (url.pathname === '/admin/auth' && request.method === 'POST') {
+    return handleAdminAuth(request, env);
+  }
+
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: '인증이 필요합니다.' }), { status: 401, headers: CORS_HEADERS });
+  }
+
+  const isAdmin = await verifyAdminToken(authHeader.split(' ')[1], env);
+  if (!isAdmin) {
+    return new Response(JSON.stringify({ error: '권한이 없습니다.' }), { status: 403, headers: CORS_HEADERS });
+  }
+}
+// 이후 handleGetImages, handleImageUpload, handleImageEdit 등은 인증 로직 없이 비즈니스 로직에만 집중
+```
+
+**얻은 것**: 핸들러 코드에 인증 로직이 전혀 없고, 인증 방식을 바꾸거나 관리자 경로를 추가할 때 `src/index.ts` 한 곳만 수정하면 됩니다.
+
+---
+
+## 엔드포인트 목록
+
+### Public API
+
+| 엔드포인트 | 메서드 | 설명 |
+|---|---|---|
+| `/api/search` | GET | 키워드·카테고리 검색 (페이지네이션) |
+| `/api/photo` | GET | 이미지 상세 조회 (파일 포맷별 정보 포함) |
+| `/api/download` | GET | 원본 파일 Presigned URL 발급 |
+| `/api/similar` | GET | 유사 이미지 추천 |
+| `/api/categories` | GET | 카테고리 목록 |
+| `/api/sitemap-data` | GET | SEO 사이트맵용 이미지 목록 |
+
+### Admin (JWT 인증 필요)
+
+| 엔드포인트 | 메서드 | 설명 |
+|---|---|---|
+| `/admin/auth` | POST | 관리자 로그인 |
+| `/admin/images` | GET | 이미지 목록 조회 |
+| `/admin/images/upload` | POST | 이미지 배치 업로드 |
+| `/admin/images/edit/:id` | GET · PATCH · POST · DELETE | 이미지 CRUD |
+| `/admin/images/delete` | DELETE | 이미지 일괄 삭제 |
+
+---
+
