@@ -1,15 +1,12 @@
-# DooDoo - 저작권 프리 이미지 다운로드 웹사이트
+# 📸 DooDoo - 저작권 프리 이미지 다운로드 웹사이트
 
-**Doodoo**는 회원가입 없이 빠른 다운로드, 저작권 걱정 없는 무료 이미지를 제공하는 Free Stock Image 사이트입니다.
-실제 운영 시 발생하는 비용 문제와
->  대규모 데이터의 검색 노출(SEO)을 엔지니어링 관점에서 해결하는 데 집중했습니다.
+> **회원가입 없는 빠른 다운로드, 저작권 걱정 없는 무료 이미지 서비스**
+> 실제 운영 시 발생하는 비용 효율화와 대규모 데이터의 검색 노출(SEO)을 엔지니어링 관점에서 해결하는 데 집중했습니다.
 
 
 ## 🚀 DEMO
-
-<img width="1285" height="742" alt="Image" src="https://github.com/user-attachments/assets/f8dd1852-0204-4378-8a07-17e38655dfce" />
-<img width="1257" height="762" alt="Image" src="https://github.com/user-attachments/assets/ec8c28c0-cd07-4b0b-aab1-1504f9041cac" />
 **서비스 링크**: [https://www.doodoostock.com/](https://www.doodoostock.com/)
+<img width="1285" height="742" alt="Image" src="https://github.com/user-attachments/assets/f8dd1852-0204-4378-8a07-17e38655dfce" />
 
 ---
 
@@ -43,13 +40,10 @@ Supabase (PostgreSQL)
 
 요청 흐름: `src/index.ts` (라우팅 + CORS) → `src/handlers/` (엔드포인트별 핸들러) → `src/lib/` · `src/utils/` (Supabase 클라이언트, 인증 미들웨어) → Supabase / R2
 
----
 
 ## 트러블슈팅
 
-단순히 동작하는 코드를 만드는 것보다, **왜 이 방식을 선택했는지** 를 설명하는 것이 더 중요하다고 생각해서 주요 문제들을 정리했습니다.
-
----
+ **왜 이 방식을 선택했는지** 를 중심으로 주요 개발 과정을 정리했습니다.
 
 ### 1. 원본 파일 보안 — R2 버킷을 두 개로 나눈 이유
 
@@ -73,13 +67,11 @@ const presignedUrl = await getSignedUrl(s3Client, command, {
 });
 ```
 
-**현재 고민**: 1시간이라는 만료 시간이 적절한지 아직 확신이 없습니다. 너무 짧으면 다운로드 도중 만료될 수 있고, 너무 길면 URL 공유로 우회될 수 있습니다. 실사용 데이터를 보면서 조정할 계획입니다.
-
 ---
 
-### 2. 조회수 집계 — DB를 직접 찌르지 않는 이유
+### 2. workers KV 조회수 집계 — DB에 조회수를 실시간으로 반영하지 않은 이유
 
-**문제**: 이미지 상세 페이지 진입 시마다 Supabase에 `UPDATE images SET views = views + 1` 을 날렸습니다. 트래픽이 적을 땐 문제없었는데, 동시 요청이 몰리면 DB 커넥션이 병목이 될 것이 뻔했습니다. 또 새로고침이나 크롤러가 조회수를 뻥튀기하는 문제도 있었습니다.
+**문제**: 이미지 상세 페이지 진입 시마다 Supabase에 `UPDATE images SET views = views + 1` 을 날렸을 때, 동시 요청이 몰리면 DB 커넥션이 병목 또는   새로고침이나 크롤러로 조회수가 쓸모없이 증가해 DB에 부담이 갈 것을 예상했습니다.
 
 **공부한 것**: "Write Buffer + Batch Flush" 패턴을 공부했습니다. Redis나 KV 같은 인메모리 저장소에 카운터를 쌓다가 주기적으로 DB에 한 번에 반영하는 방식입니다. Cloudflare에는 KV 네임스페이스가 있고, Workers Cron Trigger로 주기적 실행이 가능하다는 걸 알게 됐습니다.
 
@@ -127,34 +119,9 @@ for (const key of keys.keys) {
 }
 ```
 
-**현재 고민**: 서버가 Cron 실행 도중 KV에 새 카운트가 들어오면 그 사이 값이 유실될 수 있습니다. 지금은 허용 가능한 오차로 보고 넘기고 있는데, 나중에 `list` → `get` 사이에 원자성을 보장하는 방법을 찾아볼 생각입니다.
-
 ---
 
-### 3. 관리자 인증 — JWT를 직접 검증하는 구조
-
-**문제**: 관리자 기능(이미지 업로드·수정·삭제)을 만들면서 인증을 어떻게 처리할지 고민했습니다. Supabase Auth를 그대로 쓰면 편하지만, Workers 엣지 환경에서 매 요청마다 Supabase 세션을 조회하면 레이턴시가 붙습니다.
-
-**공부한 것**: JWT(JSON Web Token)의 자가 검증(self-contained) 특성을 공부했습니다. 서버가 토큰을 서명하면, 이후 요청마다 DB를 조회하지 않고 서명만 검증해도 인증이 됩니다. Supabase JWT는 `SUPABASE_JWT_SECRET`으로 검증할 수 있습니다.
-
-**해결**: 두 단계 검증을 적용했습니다.
-
-1. Bearer 토큰을 Supabase Auth API로 검증 (`/auth/v1/user`)
-2. 응답에서 이메일을 꺼내 화이트리스트와 대조하거나, DB `profiles.role`을 조회
-
-```typescript
-// src/lib/auth.ts
-const { data: { user } } = await supabase.auth.getUser(token);
-const isAdmin = ADMIN_WHITELIST.includes(user.email) || profile.role === 'admin';
-```
-
-관리자를 추가할 때 화이트리스트를 수정하지 않아도 되도록 DB role 방식도 병행하고 있습니다.
-
-**현재 고민**: 화이트리스트가 코드에 하드코딩되어 있어서 관리자를 추가하려면 재배포가 필요합니다. 환경 변수 또는 DB 단일화로 정리할 예정입니다.
-
----
-
-### 4. SEO — 서버리스 환경에서 사이트맵 생성
+### 3. SEO — 서버리스 환경에서 사이트맵 생성
 
 **문제**: 스톡 이미지 서비스에서 SEO는 핵심입니다. 그런데 이미지가 계속 추가되므로 사이트맵을 정적 파일로 관리하기 어렵습니다. Next.js의 `app/sitemap.ts`에서 빌드 타임에 생성하면 최신 이미지가 반영되지 않는 문제가 있었습니다.
 
@@ -169,7 +136,7 @@ const { data } = await supabase
 
 ---
 
-### 5. 관리자 API 라우팅 — 관문(Gatekeeper) 패턴으로 권한을 일괄 보호한 이유
+### 4. 관리자 API 라우팅 — 관문(Gatekeeper) 패턴으로 권한을 일괄 보호한 이유
 
 **문제**: 관리자 엔드포인트가 늘어날수록 각 핸들러마다 인증 코드를 붙이면 빠뜨릴 여지가 생깁니다. 나중에 인증 방식을 바꿔야 할 때 수정 범위도 넓어집니다.
 
