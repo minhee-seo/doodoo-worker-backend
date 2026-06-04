@@ -34,8 +34,12 @@ export async function handleSimilar(request: Request, env: Env): Promise<Respons
   if (searchError) {
     return new Response(JSON.stringify({ error: searchError.message }), { status: 500 });
   }
-
+  
   return new Response(JSON.stringify({ target, similar: similarImages }), {
-    headers: { "Content-Type": "application/json", ...CORS_HEADERS }
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "public, max-age=86400",
+      ...CORS_HEADERS
+    }
   });
 };
