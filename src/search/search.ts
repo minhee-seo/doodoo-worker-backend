@@ -1,7 +1,7 @@
 import { getSupabaseClient } from '../lib/supabase';
 import { CORS_HEADERS, Env } from '../lib/constants';
 
-const MAX_RESULTS = 8;
+const PAGE_SIZE = 30;
 const PROMPT_SELECT = `
   id,
   slug,
@@ -57,7 +57,10 @@ function formatPrompt(prompt: PromptRow) {
 }
 
 export async function handleSearch(request: Request, env: Env): Promise<Response> {
-  const query = new URL(request.url).searchParams.get('q')?.trim();
+  const url = new URL(request.url);
+  const query = url.searchParams.get('q')?.trim();
+  const pageParam = url.searchParams.get('page') ?? url.searchParams.get('p') ?? '1';
+  const page = Number(pageParam);
 
   if (!query) {
     return jsonResponse({ error: '검색어(q)를 입력해 주세요.' }, 400);
@@ -65,6 +68,10 @@ export async function handleSearch(request: Request, env: Env): Promise<Response
 
   if (query.length > 100) {
     return jsonResponse({ error: '검색어는 100자 이하여야 합니다.' }, 400);
+  }
+
+  if (!/^\d+$/.test(pageParam) || !Number.isSafeInteger(page) || page < 1) {
+    return jsonResponse({ error: '페이지 번호는 1 이상의 정수여야 합니다.' }, 400);
   }
 
   const supabase = getSupabaseClient(env);
@@ -79,8 +86,7 @@ export async function handleSearch(request: Request, env: Env): Promise<Response
       .lte('published_at', now)
       .or(`title.ilike."${pattern}",summary.ilike."${pattern}",base_prompt.ilike."${pattern}"`)
       .order('sort_order', { ascending: true })
-      .order('published_at', { ascending: false })
-      .limit(MAX_RESULTS),
+      .order('published_at', { ascending: false }),
     supabase
       .from('tags')
       .select('id')
@@ -116,15 +122,20 @@ export async function handleSearch(request: Request, env: Env): Promise<Response
     prompts.set(prompt.id, prompt);
   }
 
-  const results = [...prompts.values()]
+  const allResults = [...prompts.values()]
     .sort((a, b) => a.sort_order - b.sort_order
-      || new Date(b.published_at).getTime() - new Date(a.published_at).getTime())
-    .slice(0, MAX_RESULTS)
-    .map(formatPrompt);
+      || new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
+  const totalCount = allResults.length;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const start = (page - 1) * PAGE_SIZE;
+  const results = allResults.slice(start, start + PAGE_SIZE).map(formatPrompt);
 
   return jsonResponse({
     query,
     prompts: results,
-    total_count: results.length,
+    total_count: totalCount,
+    page,
+    limit: PAGE_SIZE,
+    total_pages: totalPages,
   });
 }
