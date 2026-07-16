@@ -1,4 +1,4 @@
-export interface Env {
+    export interface Env {
   PRIVATE_ORIGINALS: R2Bucket; // 원본 파일 (보안용)
   PUBLIC_ASSETS: R2Bucket;     // 썸네일/프리뷰 (공개용)
 

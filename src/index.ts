@@ -1,23 +1,20 @@
 import { Router } from 'itty-router';
-import { handleSearch } from './handlers/search';
-import { Env, CORS_HEADERS } from './lib/constants';
-import { handleDownload } from './handlers/download';
-import { handlePhoto } from './handlers/handlePhoto';
-import { handleGetCategories } from './handlers/handleGetCategories';
-import { handleSimilar } from './handlers/similar';
-import { handleAdminAuth } from './handlers/handleAdminAuth';
+import { handleSearch } from './search/search';
+import { Env as AppEnv, CORS_HEADERS } from './lib/constants';
+import { handlePhoto } from './handlers/photo/handlePhoto';
+import { handleGetCategories } from './handlers/search/handleGetCategories';
 import { authenticateAdmin } from './utils/authMiddleware';
-import { handleViewIncrement } from './handlers/handleViewIncrement';
-import { handleBatchUpdate } from './handlers/handleBatchUpdate';
-import { handleGetImages } from './handlers/handleGetImages';
-import { handleImageUpload } from './handlers/handleImageUpload';
-import { handleImageEdit } from './handlers/handleImageEdit';
-import { handleFullStockDelete } from './handlers/handleImageDelete';
-import { handleLogout } from './handlers/handleLogout';
+import { handleViewIncrement } from './handlers/photo/handleViewIncrement';
+import { handleBatchUpdate } from './handlers/photo/handleBatchUpdate';
+import { handleGetImages } from './handlers/admin/imageEdit/handleGetImages';
+import { handleImageUpload } from './handlers/admin/imageEdit/handleImageUpload';
+import { handleImageEdit } from './handlers/admin/imageEdit/handleImageEdit';
+import { handleFullStockDelete } from './handlers/admin/imageEdit/handleImageDelete';
+import { handleLogout } from './handlers/admin/auth/handleLogout';
 import verifyAdminToken from './lib/auth';
 import { handleSitemapData } from './handlers/handleSitemapData';
 
-interface Env {
+interface Env extends AppEnv {
   PRIVATE_ORIGINALS: R2Bucket;
   PUBLIC_ASSETS: R2Bucket;
 
@@ -109,7 +106,7 @@ export default {
       return handleSitemapData(request, env);
     }
 
-    if (url.pathname === '/api/search') {
+    if (url.pathname === '/api/search' && request.method === 'GET') {
       return handleSearch(request, env);
     }
 
@@ -117,42 +114,7 @@ export default {
       return handleGetCategories(request, env);
     }
 
-    if (url.pathname === '/api/download') {
-      return handleDownload(request, env);
-    }
 
-    if (url.pathname === '/api/photo' && request.method === 'GET') {
-      // 1. 쿼리 파라미터에서 ID 추출
-      const imageId = url.searchParams.get('id');
-
-      if (imageId && imageId.length > 5) { // 유효한 ID인지 확인
-
-        const photoResponse = await handlePhoto(request, env, imageId);
-
-        const viewIncrementResponse = await handleViewIncrement(request, env, imageId);
-
-        const responseHeaders = new Headers(photoResponse.headers);
-        const setCookieHeader = viewIncrementResponse.headers.get('Set-Cookie');
-
-        if (setCookieHeader) {
-          responseHeaders.set('Set-Cookie', setCookieHeader);
-        }
-
-        return new Response(photoResponse.body, {
-          status: photoResponse.status,
-          headers: responseHeaders,
-        });
-      }
-
-      return new Response(JSON.stringify({ error: '이미지 ID(id) 쿼리 파라미터가 누락되었습니다.' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-      });
-    }
-
-    if (url.pathname === '/api/similar') {
-      return handleSimilar(request, env);
-    }
     return new Response('API route not found.', { status: 404 });
   },
 

@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { CORS_HEADERS, Env } from "../lib/constants";
+import { CORS_HEADERS, Env } from "../../../lib/constants";
 
 export async function handleFullStockDelete(request: Request, env: Env): Promise<Response> {
   const headers = { 'Content-Type': 'application/json', ...CORS_HEADERS };

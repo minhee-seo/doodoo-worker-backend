@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { CORS_HEADERS, Env } from '../lib/constants';
+import { CORS_HEADERS, Env } from '../../../lib/constants';
 
 export async function handleGetImages(request: Request, env: Env) {
   // 1. Supabase 클라이언트 초기화

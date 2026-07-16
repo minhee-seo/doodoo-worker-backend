@@ -1,5 +1,5 @@
-import { getSupabaseClient } from '../lib/supabase';
-import { Env, CORS_HEADERS } from '../lib/constants';
+import { getSupabaseClient } from '../../lib/supabase';
+import { Env, CORS_HEADERS } from '../../lib/constants';
 
 export async function handlePhoto(request: Request, env: Env, imageId: string): Promise<Response> {
   const supabase = getSupabaseClient(env);

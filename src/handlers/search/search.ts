@@ -1,5 +1,5 @@
-import { getSupabaseClient } from '../lib/supabase';
-import { Env, CORS_HEADERS } from '../lib/constants';
+import { getSupabaseClient } from '../../lib/supabase';
+import { Env, CORS_HEADERS } from '../../lib/constants';
 
 export async function handleSearch(request: Request, env: Env): Promise<Response> {
   const supabase = getSupabaseClient(env);

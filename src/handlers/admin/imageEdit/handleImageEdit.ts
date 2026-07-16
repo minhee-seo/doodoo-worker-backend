@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { CORS_HEADERS, Env } from '../lib/constants';
+import { CORS_HEADERS, Env } from '../../../lib/constants';
 
 export async function handleImageEdit(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);

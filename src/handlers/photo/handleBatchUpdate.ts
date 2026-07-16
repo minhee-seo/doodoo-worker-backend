@@ -1,7 +1,7 @@
 // src/handlers/handleBatchUpdate.ts
 
-import { Env } from '../index';
-import { getSupabaseAdminClient } from '../utils/supabaseAdmin';
+import { Env } from '../../index';
+import { getSupabaseAdminClient } from '../../utils/supabaseAdmin';
 import * as Postgrest from '@supabase/postgrest-js';
 
 export async function handleBatchUpdate(env: Env): Promise<void> {

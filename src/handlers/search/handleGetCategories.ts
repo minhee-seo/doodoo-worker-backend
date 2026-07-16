@@ -1,5 +1,5 @@
-import { CORS_HEADERS } from "../lib/constants";
-import { getSupabaseClient } from "../lib/supabase";
+import { CORS_HEADERS } from "../../lib/constants";
+import { getSupabaseClient } from "../../lib/supabase";
 
 export async function handleGetCategories(request: Request, env: Env): Promise<Response> {
   const supabase = getSupabaseClient(env);

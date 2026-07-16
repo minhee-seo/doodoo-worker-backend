@@ -1,7 +1,7 @@
 // src/handlers/handleViewIncrement.ts
 
-import { Env } from '../index';
-import { CORS_HEADERS } from '../lib/constants';
+import { Env } from '../../index';
+import { CORS_HEADERS } from '../../lib/constants';
 
 export async function handleViewIncrement(request: Request, env: Env, id: string): Promise<Response> {
     

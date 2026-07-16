@@ -1,6 +1,6 @@
 // auth.ts 또는 별도 핸들러 파일
 
-import { CORS_HEADERS, Env } from "../lib/constants";
+import { CORS_HEADERS, Env } from "../../../lib/constants";
 
 export async function handleLogout(request: Request, env: Env): Promise<Response> {
   try {
