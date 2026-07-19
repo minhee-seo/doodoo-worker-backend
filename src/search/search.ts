@@ -1,13 +1,15 @@
 import { getSupabaseClient } from '../lib/supabase';
 import { CORS_HEADERS, Env } from '../lib/constants';
 
+
 const PAGE_SIZE = 30;
-const PROMPT_SELECT = `
+const getPromptSelect = (lang: string) => `
   id,
   slug,
-  title,
-  summary,
-  image_key,
+  title->>${lang},
+  summary->>${lang},
+  image_thumbnail_key,
+  image_preview_key,
   image_alt,
   published_at,
   sort_order,
@@ -18,9 +20,9 @@ const PROMPT_SELECT = `
 type PromptRow = {
   id: string;
   slug: string;
-  title: string;
-  summary: string;
-  image_key: string;
+  [key: string]: any; // 동적 dynamic key (lang 값) 매핑용
+  image_thumbnail_key: string;
+  image_preview_key: string;
   image_alt: string;
   published_at: string;
   sort_order: number;
@@ -43,13 +45,17 @@ function escapeIlikeValue(value: string): string {
   return value.replace(/[\\%_]/g, '\\$&').replace(/"/g, '\\"');
 }
 
-function formatPrompt(prompt: PromptRow) {
+function formatPrompt(prompt: PromptRow, lang: string, env: Env) {
+  const imgBaseUrl = env.PUBLIC_VERCEL || "https://img.doodoostock.com";
+
   return {
     id: prompt.id,
     slug: prompt.slug,
-    title: prompt.title,
-    summary: prompt.summary,
-    imageKey: prompt.image_key,
+    // 해당 언어 데이터가 없으면 한국어('ko')를 백업(Fallback)으로 적용
+    title: prompt[lang] || prompt['ko'],
+    summary: prompt[lang] || prompt['ko'],
+    imageThumbnailKey: `${imgBaseUrl}/${prompt.image_thumbnail_key}`,
+    imagePreviewKey: `${imgBaseUrl}/${prompt.image_preview_key}`,
     imageAlt: prompt.image_alt,
     category: prompt.category,
     tags: prompt.prompt_tags.flatMap(({ tag }) => (tag ? [tag] : [])),
@@ -61,6 +67,11 @@ export async function handleSearch(request: Request, env: Env): Promise<Response
   const query = url.searchParams.get('q')?.trim();
   const pageParam = url.searchParams.get('page') ?? url.searchParams.get('p') ?? '1';
   const page = Number(pageParam);
+
+  // URL에서 lang 파라미터 추출 (기본값: 'ko')
+  const langParam = url.searchParams.get('lang') || 'ko';
+  const allowedLangs = ['ko', 'en'];
+  const lang = allowedLangs.includes(langParam) ? langParam : 'ko';
 
   if (!query) {
     return jsonResponse({ error: '검색어(q)를 입력해 주세요.' }, 400);
@@ -78,13 +89,18 @@ export async function handleSearch(request: Request, env: Env): Promise<Response
   const pattern = `*${escapeIlikeValue(query)}*`;
   const now = new Date().toISOString();
 
+  // 동적으로 쿼리 구문 생성
+  const promptSelectStr = getPromptSelect(lang);
+
+  // JSONB 컬럼 전용 .or() 검색 필터 쿼리 수정
+  // PostgreSQL에서 ->> 연산자로 추출된 텍스트 필드를 기준으로 ilike 검색 수행
   const [textResult, tagResult] = await Promise.all([
     supabase
       .from('prompts')
-      .select(PROMPT_SELECT)
+      .select(promptSelectStr)
       .eq('status', 'published')
       .lte('published_at', now)
-      .or(`title.ilike."${pattern}",summary.ilike."${pattern}",base_prompt.ilike."${pattern}"`)
+      .or(`title->>${lang}.ilike."${pattern}",summary->>${lang}.ilike."${pattern}",base_prompt.ilike."${pattern}"`)
       .order('sort_order', { ascending: true })
       .order('published_at', { ascending: false }),
     supabase
@@ -105,7 +121,7 @@ export async function handleSearch(request: Request, env: Env): Promise<Response
   if (tagIds.length > 0) {
     const { data, error } = await supabase
       .from('prompt_tags')
-      .select(`prompt:prompts!inner(${PROMPT_SELECT})`)
+      .select(`prompt:prompts!inner(${promptSelectStr})`)
       .in('tag_id', tagIds);
 
     if (error) {
@@ -128,10 +144,12 @@ export async function handleSearch(request: Request, env: Env): Promise<Response
   const totalCount = allResults.length;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const start = (page - 1) * PAGE_SIZE;
-  const results = allResults.slice(start, start + PAGE_SIZE).map(formatPrompt);
+
+  const results = allResults.slice(start, start + PAGE_SIZE).map((p) => formatPrompt(p, lang, env));
 
   return jsonResponse({
     query,
+    lang, // 현재 적용된 언어 정보도 함께 응답
     prompts: results,
     total_count: totalCount,
     page,

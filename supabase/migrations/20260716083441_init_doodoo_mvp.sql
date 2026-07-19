@@ -39,29 +39,43 @@ create table public.tags (
   updated_at timestamptz not null default now()
 );
 
-create table public.prompts (
-  id uuid primary key default gen_random_uuid(),
-  slug text not null unique check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
-  title text not null check (char_length(trim(title)) > 0),
-  summary text not null default '',
-  category_id uuid not null references public.categories (id) on delete restrict,
+CREATE TABLE public.prompts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug text NOT NULL UNIQUE CHECK (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
+  
+  -- 1. 다국어 지원을 위해 JSONB 타입으로 변경
+  title jsonb NOT NULL,
+  summary jsonb NOT NULL DEFAULT '{}'::jsonb,
+  
+  category_id uuid NOT NULL REFERENCES public.categories (id) ON DELETE RESTRICT,
   sub_option_id uuid,
-  base_prompt text not null check (char_length(trim(base_prompt)) > 0),
-  edit_fields jsonb not null default '[]'::jsonb,
-  image_key text not null check (image_key !~ '^/' and char_length(trim(image_key)) > 0),
-  image_alt text not null default '',
-  status public.prompt_status not null default 'draft',
+  base_prompt text NOT NULL CHECK (char_length(trim(base_prompt)) > 0),
+  edit_fields jsonb NOT NULL DEFAULT '[]'::jsonb,
+  
+  -- 2. 기존 image_key를 썸네일과 프리뷰 경로로 분리 및 제약조건 적용
+  image_thumbnail_key text NOT NULL CHECK (image_thumbnail_key !~ '^/' AND char_length(trim(image_thumbnail_key)) > 0),
+  image_preview_key text NOT NULL CHECK (image_preview_key !~ '^/' AND char_length(trim(image_preview_key)) > 0),
+  
+  image_alt text NOT NULL DEFAULT '',
+  status public.prompt_status NOT NULL DEFAULT 'draft',
   published_at timestamptz,
-  sort_order integer not null default 0,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint prompts_edit_fields_is_array check (jsonb_typeof(edit_fields) = 'array'),
-  constraint prompts_published_at_matches_status check (
-    (status = 'published' and published_at is not null)
-    or (status in ('draft', 'archived') and published_at is null)
+  sort_order integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  
+  -- 3. 고도화된 JSONB 타입 정밀 검증 제약 조건들
+  CONSTRAINT prompts_title_is_object CHECK (jsonb_typeof(title) = 'object'),
+  CONSTRAINT prompts_summary_is_object CHECK (jsonb_typeof(summary) = 'object'),
+  CONSTRAINT prompts_edit_fields_is_array CHECK (jsonb_typeof(edit_fields) = 'array'),
+  
+  -- 상태 및 날짜 매칭 제약 조건
+  CONSTRAINT prompts_published_at_matches_status CHECK (
+    (status = 'published' AND published_at IS NOT NULL)
+    OR (status IN ('draft', 'archived') AND published_at IS NULL)
   ),
-  constraint prompts_sub_option_in_category foreign key (sub_option_id, category_id)
-    references public.sub_options (id, category_id) on delete restrict
+  -- 카테고리-서브옵션 복합 외래키 제약 조건
+  CONSTRAINT prompts_sub_option_in_category FOREIGN KEY (sub_option_id, category_id)
+    REFERENCES public.sub_options (id, category_id) ON DELETE RESTRICT
 );
 
 create table public.prompt_tags (
