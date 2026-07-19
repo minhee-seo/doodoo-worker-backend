@@ -65,20 +65,27 @@ function formatPrompt(prompt: PromptRow, lang: string, env: Env) {
 export async function handleSearch(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const query = url.searchParams.get('q')?.trim();
+  
+  const categoryParam = url.searchParams.get('category') ?? url.searchParams.get('c') ?? '';
+  const category = categoryParam.trim();
+
   const pageParam = url.searchParams.get('page') ?? url.searchParams.get('p') ?? '1';
   const page = Number(pageParam);
 
-  // URL에서 lang 파라미터 추출 (기본값: 'ko')
   const langParam = url.searchParams.get('lang') || 'ko';
   const allowedLangs = ['ko', 'en'];
   const lang = allowedLangs.includes(langParam) ? langParam : 'ko';
 
-  if (!query) {
-    return jsonResponse({ error: '검색어(q)를 입력해 주세요.' }, 400);
+  if (!query && !category) {
+    return jsonResponse({ error: '검색어(q) 또는 카테고리를 입력해 주세요.' }, 400);
   }
 
-  if (query.length > 100) {
+  if (query && query.length > 100) {
     return jsonResponse({ error: '검색어는 100자 이하여야 합니다.' }, 400);
+  }
+
+  if (category && category.length > 50) {
+    return jsonResponse({ error: '카테고리 값이 올바르지 않습니다.' }, 400);
   }
 
   if (!/^\d+$/.test(pageParam) || !Number.isSafeInteger(page) || page < 1) {
@@ -86,43 +93,74 @@ export async function handleSearch(request: Request, env: Env): Promise<Response
   }
 
   const supabase = getSupabaseClient(env);
-  const pattern = `*${escapeIlikeValue(query)}*`;
+  const pattern = query ? `*${escapeIlikeValue(query)}*` : '';
   const now = new Date().toISOString();
 
-  // 동적으로 쿼리 구문 생성
   const promptSelectStr = getPromptSelect(lang);
 
-  // JSONB 컬럼 전용 .or() 검색 필터 쿼리 수정
-  // PostgreSQL에서 ->> 연산자로 추출된 텍스트 필드를 기준으로 ilike 검색 수행
-  const [textResult, tagResult] = await Promise.all([
-    supabase
-      .from('prompts')
-      .select(promptSelectStr)
-      .eq('status', 'published')
-      .lte('published_at', now)
-      .or(`title->>${lang}.ilike."${pattern}",summary->>${lang}.ilike."${pattern}",base_prompt.ilike."${pattern}"`)
-      .order('sort_order', { ascending: true })
-      .order('published_at', { ascending: false }),
-    supabase
+  // ----------------------------------------------------
+  // 1. 메인 텍스트 쿼리 빌더 조립
+  // ----------------------------------------------------
+  let textQueryBuilder = supabase
+    .from('prompts')
+    .select(promptSelectStr)
+    .eq('status', 'published')
+    .lte('published_at', now);
+
+  // 카테고리가 있으면 카테고리 테이블을 강제 inner 조인
+  if (category) {
+    textQueryBuilder = textQueryBuilder.eq('category.slug', category);
+  }
+
+  if (query) {
+    textQueryBuilder = textQueryBuilder.or(
+      `title->>${lang}.ilike."${pattern}",summary->>${lang}.ilike."${pattern}",base_prompt.ilike."${pattern}"`
+    );
+  }
+
+  // ----------------------------------------------------
+  // 2. 태그 아이디 쿼리 (검색어가 있을 때만 실행)
+  // ----------------------------------------------------
+  let tagIds: string[] = [];
+  let tagError = null;
+
+  if (query) {
+    const tagResult = await supabase
       .from('tags')
       .select('id')
-      .or(`name.ilike."${pattern}",slug.ilike."${pattern}"`),
-  ]);
+      .or(`name.ilike."${pattern}",slug.ilike."${pattern}"`);
+    
+    tagError = tagResult.error;
+    tagIds = (tagResult.data ?? []).map(({ id }) => id);
+  }
 
-  if (textResult.error || tagResult.error) {
-    const error = textResult.error ?? tagResult.error;
+  // 텍스트 검색 결과 먼저 실행
+  const textResult = await textQueryBuilder;
+
+  if (textResult.error || tagError) {
+    const error = textResult.error ?? tagError;
     console.error('Prompt search failed:', error?.message);
     return jsonResponse({ error: '검색 결과를 불러오지 못했습니다.' }, 500);
   }
 
-  const tagIds = (tagResult.data ?? []).map(({ id }) => id);
+  // ----------------------------------------------------
+  // 3. 태그 맵핑 검색 결과 조회 및 교차 검증
+  // ----------------------------------------------------
   let tagPrompts: PromptRow[] = [];
-
-  if (tagIds.length > 0) {
-    const { data, error } = await supabase
+  if (query && tagIds.length > 0) {
+    let tagQueryBuilder = supabase
       .from('prompt_tags')
       .select(`prompt:prompts!inner(${promptSelectStr})`)
-      .in('tag_id', tagIds);
+      .in('tag_id', tagIds)
+      .eq('prompts.status', 'published')
+      .lte('prompts.published_at', now);
+
+    // 태그 연결 테이블에서 가져올 때도 카테고리 조건을 inner 조인
+    if (category) {
+      tagQueryBuilder = tagQueryBuilder.eq('prompts.category.slug', category);
+    }
+
+    const { data, error } = await tagQueryBuilder;
 
     if (error) {
       console.error('Tag prompt search failed:', error.message);
@@ -133,14 +171,30 @@ export async function handleSearch(request: Request, env: Env): Promise<Response
       .flatMap(({ prompt }) => (prompt ? [prompt] : []));
   }
 
+  // ----------------------------------------------------
+  // 4. 결과 병합 및 최종 안전 필터링
+  // ----------------------------------------------------
   const prompts = new Map<string, PromptRow>();
-  for (const prompt of [...(textResult.data as unknown as PromptRow[] ?? []), ...tagPrompts]) {
+  
+  // 합치기 대상 전체 리스트 구하기
+  const rawMergedList = [
+    ...(textResult.data as unknown as PromptRow[] ?? []), 
+    ...tagPrompts
+  ];
+
+  for (const prompt of rawMergedList) {
+    // DB 릴레이션 범위 밖에서 null 데이터가 타고 들어오는 것을 메모리 단에서 최종 필터링
+    if (category && (!prompt.category || prompt.category.slug !== category)) {
+      continue; 
+    }
     prompts.set(prompt.id, prompt);
   }
 
+  // 정렬, 페이징
   const allResults = [...prompts.values()]
     .sort((a, b) => a.sort_order - b.sort_order
       || new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
+  
   const totalCount = allResults.length;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const start = (page - 1) * PAGE_SIZE;
@@ -148,8 +202,9 @@ export async function handleSearch(request: Request, env: Env): Promise<Response
   const results = allResults.slice(start, start + PAGE_SIZE).map((p) => formatPrompt(p, lang, env));
 
   return jsonResponse({
-    query,
-    lang, // 현재 적용된 언어 정보도 함께 응답
+    query: query || '',
+    category,
+    lang, 
     prompts: results,
     total_count: totalCount,
     page,
