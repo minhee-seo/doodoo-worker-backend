@@ -7,11 +7,8 @@ const getPromptSelect = (lang: string) => `
   id,
   slug,
   title->>${lang},
-  summary->>${lang},
   image_thumbnail_key,
-  image_preview_key,
   image_alt,
-  published_at,
   sort_order,
   category:categories (slug, name),
   prompt_tags (tag:tags (slug, name))
@@ -22,7 +19,6 @@ type PromptRow = {
   slug: string;
   [key: string]: any; // 동적 dynamic key (lang 값) 매핑용
   image_thumbnail_key: string;
-  image_preview_key: string;
   image_alt: string;
   published_at: string;
   sort_order: number;
@@ -53,9 +49,7 @@ function formatPrompt(prompt: PromptRow, lang: string, env: Env) {
     slug: prompt.slug,
     // 해당 언어 데이터가 없으면 한국어('ko')를 백업(Fallback)으로 적용
     title: prompt[lang] || prompt['ko'],
-    summary: prompt[lang] || prompt['ko'],
     imageThumbnailKey: `${imgBaseUrl}/${prompt.image_thumbnail_key}`,
-    imagePreviewKey: `${imgBaseUrl}/${prompt.image_preview_key}`,
     imageAlt: prompt.image_alt,
     category: prompt.category,
     tags: prompt.prompt_tags.flatMap(({ tag }) => (tag ? [tag] : [])),
