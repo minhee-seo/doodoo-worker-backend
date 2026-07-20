@@ -13,6 +13,7 @@ import { handleFullStockDelete } from './handlers/admin/imageEdit/handleImageDel
 import { handleLogout } from './handlers/admin/auth/handleLogout';
 import verifyAdminToken from './lib/auth';
 import { handleSitemapData } from './handlers/handleSitemapData';
+import { handleGetPromptDetail } from './handlers/photo/promptDetail';
 
 interface Env extends AppEnv {
   PRIVATE_ORIGINALS: R2Bucket;
@@ -110,9 +111,16 @@ export default {
       return handleSearch(request, env);
     }
 
+
     if (url.pathname === '/api/categories' && request.method === 'GET') {
       return handleGetCategories(request, env);
     }
+    
+    if (url.pathname.startsWith('/api/prompts/') && request.method === 'GET') {
+      const slug = url.pathname.replace('/api/prompts/', '').trim();
+      return handleGetPromptDetail(request, env, slug);
+    }
+
 
 
     return new Response('API route not found.', { status: 404 });
