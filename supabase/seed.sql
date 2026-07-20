@@ -197,3 +197,139 @@ FROM (
 ) AS mappings (prompt_id, tag_slug)
 JOIN public.tags ON tags.slug = mappings.tag_slug
 ON CONFLICT DO NOTHING;
+
+
+-- 
+-- 
+-- 
+-- 
+-- ==========================================
+-- 3. 서브 옵션 동적 FK 연동 (Typography 카테고리 하위에 3D Text 추가)
+-- ==========================================
+INSERT INTO public.sub_options (id, category_id, slug, name, sort_order)
+SELECT 
+  '22222222-2222-2222-2222-222222222222'::uuid,
+  c.id, -- slug가 'typography'인 카테고리의 실제 ID를 동적으로 조인
+  '3d-text',
+  '3D Text',
+  1
+FROM public.categories c
+WHERE c.slug = 'typography'
+ON CONFLICT (category_id, slug) DO UPDATE SET name = EXCLUDED.name;
+
+-- ==========================================
+-- 4. Y2K 젤리 텍스트 프롬프트 등록 (동적 FK 참조)
+-- ==========================================
+INSERT INTO public.prompts (
+  id,
+  slug,
+  title,
+  summary,
+  category_id,
+  sub_option_id,
+  base_prompt,
+  edit_fields,
+  image_thumbnail_key,
+  image_preview_key,
+  image_alt,
+  status,
+  published_at,
+  sort_order
+)
+SELECT
+  '99999999-9999-9999-9999-999999999999'::uuid,
+  'y2k-glossy-jelly-typography-poster',
+  '{"ko": "영롱한 Y2K 입체 젤리 텍스트 포스터", "en": "Y2K Glossy Jelly Typography Poster"}'::jsonb,
+  '{"ko": "투명하고 오팔빛이 도는 핑크 젤리 질감의 3D 타이포그래피 포스터 프롬프트입니다.", "en": "A premium typography poster with translucent glossy jelly-text lettering."}'::jsonb,
+  c.id,  -- typography 카테고리 ID 동적 연동
+  s.id,  -- 3d-text 서브 옵션 ID 동적 연동
+  '[Purpose]
+Create a premium typography-focused poster featuring glossy translucent jelly-text lettering with a dreamy Y2K aesthetic. Generate a clean commercial-quality design that highlights the typography as the main visual element while maintaining a cute, luxurious, and highly shareable social-media-friendly appearance.
+
+[Scene]
+A minimal pastel pink studio backdrop with a soft gradient background and abundant negative space. Small floating decorative elements including glossy hearts and sparkling star icons are placed around the typography to create a playful, dreamy, and feminine atmosphere. The environment is clean, uncluttered, and visually balanced.
+
+[Main Subject]
+The primary focus is a large 3D jelly-text typography displaying "{{MAIN_TEXT}}". The letters are inflated, rounded, soft, and balloon-like, made from translucent glossy gel material with subtle transparency and a pearlescent iridescent finish. The surface reflects soft pink, lavender, and white highlights, creating a premium liquid-glass appearance. Additional matching decorative hearts and sparkles float around the text using the same translucent material.
+
+[Style]
+Y2K aesthetic, glossy liquid typography, translucent jelly material, kawaii luxury design, dreamcore aesthetic, soft pastel palette, Pinterest-inspired graphic design, Korean visual trend style, premium commercial render, cute luxury branding, clean minimalism, highly polished 3D illustration, modern social-media poster design.
+
+[Composition]
+Centered symmetrical composition with the typography occupying approximately seventy percent of the frame. Decorative hearts and sparkle elements are distributed evenly around the text. Large negative space surrounds the subject to enhance readability and luxury appeal. Main title positioned in the center, optional subtitle beneath the title, and optional descriptive copy at the bottom. Balanced spacing and strong visual hierarchy.
+
+[Lighting]
+Soft studio lighting with diffused illumination, gentle ambient glow, subtle rim lighting around the typography, smooth reflections across the glossy surface, soft internal light scattering inside the translucent material, delicate shadows, bright pastel reflections, and no harsh contrast.
+
+[Text]
+Main headline: "{{Jelly}}"
+Subtitle: "{{Sweet Dream}}"
+Description: "{{I''ve never seen the text so sweet}}"
+
+[Color Palette]
+Soft blush pink, pastel rose, pearl white, pale lavender, subtle holographic reflections, iridescent rainbow highlights, creamy beige background, soft candy-inspired tones, low-saturation pastel colors, luxury beauty-brand color grading.
+
+[Material]
+Ultra-glossy translucent jelly material, liquid glass texture, inflated gel appearance, pearlescent coating, soft refraction, smooth rounded edges, crystal-clear highlights, realistic light transmission, premium cosmetic-advertisement quality material rendering.
+
+[Camera]
+Front-facing view, centered framing, slight telephoto perspective, orthographic-like product presentation, sharp focus on typography, high-resolution render, commercial poster presentation.
+
+[Mood]
+Cute, dreamy, playful, feminine, luxurious, trendy, aesthetic, modern, charming, soft, uplifting, elegant, premium, youthful, fashionable.
+
+[Constraints]
+No people, no realistic environment, no complex scenery, no cluttered composition, no dark mood, no harsh shadows, no excessive decoration, no metallic materials, no grunge textures, no visible noise, no low-resolution details, no typography distortion, maintain perfect text readability, ultra-clean background, premium advertising quality, high detail, 8K render.',
+  '[
+    {
+      "key": "MAIN_TEXT",
+      "label": "메인 텍스트 (3D)",
+      "type": "text",
+      "default": "Jelly"
+    },
+    {
+      "key": "Jelly",
+      "label": "메인 헤드라인",
+      "type": "text",
+      "default": "Jelly"
+    },
+    {
+      "key": "Sweet Dream",
+      "label": "서브 타이틀",
+      "type": "text",
+      "default": "Sweet Dream"
+    },
+    {
+      "key": "I''ve never seen the text so sweet",
+      "label": "하단 문구",
+      "type": "text",
+      "default": "I''ve never seen the text so sweet"
+    }
+  ]'::jsonb,
+  'images/thumbnails/y2k-glossy-jelly-typography-poster-thumb.png',
+  'images/previews/y2k-glossy-jelly-typography-poster-preview.png',
+  'Pink glossy translucent 3D jelly typography reading Jelly Sweet Dream',
+  'published',
+  now(),
+  1
+FROM public.categories c
+JOIN public.sub_options s ON s.category_id = c.id AND s.slug = '3d-text'
+WHERE c.slug = 'typography'
+ON CONFLICT (slug) DO UPDATE
+SET 
+  title = EXCLUDED.title,
+  base_prompt = EXCLUDED.base_prompt,
+  edit_fields = EXCLUDED.edit_fields;
+
+-- ==========================================
+-- 5. 프롬프트 - 태그 매핑 (동적 태그 ID 매핑)
+-- ==========================================
+INSERT INTO public.prompt_tags (prompt_id, tag_id)
+SELECT 
+  '99999999-9999-9999-9999-999999999999'::uuid,
+  t.id
+FROM public.tags t
+WHERE t.slug IN ('poster', '3d-character', 'pastel-tone')
+ON CONFLICT (prompt_id, tag_id) DO NOTHING;
+
+COMMIT;

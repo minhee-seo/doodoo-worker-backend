@@ -93,7 +93,9 @@ export async function handleGetPromptDetail(
       title: titleObj[lang] || titleObj['ko'] || '',
       summary: summaryObj[lang] || summaryObj['ko'] || '',
       base_prompt: prompt.base_prompt,
-      edit_fields: prompt.edit_fields ?? [],
+      edit_fields: typeof prompt.edit_fields === 'string'
+        ? JSON.parse(prompt.edit_fields)
+        : (prompt.edit_fields || []),
       image_preview_url: `${r2BaseUrl}/${prompt.image_preview_key}`,
       image_alt: prompt.image_alt,
       category: prompt.category,
@@ -105,7 +107,7 @@ export async function handleGetPromptDetail(
     };
 
     return new Response(JSON.stringify(formattedPrompt), {
-      status: 200,
+      status: 200, 
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'public, max-age=60, s-maxage=300', // CDN 캐싱 설정
