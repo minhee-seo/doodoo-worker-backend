@@ -175,3 +175,90 @@ using (
 grant usage on schema public to anon, authenticated;
 grant select on public.categories, public.sub_options, public.tags, public.prompts, public.prompt_tags
   to anon, authenticated;
+
+-- 
+-- 
+-- 유사 이미지 검색 RPC
+-- 
+-- 
+create or replace function public.get_similar_prompts(
+  target_prompt_id uuid,
+  limit_count integer default 4
+)
+returns table (
+  id uuid,
+  slug text,
+  title jsonb,
+  image_thumbnail_key text,
+  image_preview_key text,
+  category_id uuid,
+  sub_option_id uuid,
+  similarity_score bigint
+)
+language plpgsql
+security definer
+as $$
+declare
+  target_category_id uuid;
+  target_sub_option_id uuid;
+begin
+  -- 1. 기준이 되는 프롬프트의 카테고리 및 서브옵션 조회
+  select p.category_id, p.sub_option_id
+  into target_category_id, target_sub_option_id
+  from public.prompts p
+  where p.id = target_prompt_id;
+
+  -- 2. 점수 계산 및 유사 프롬프트 추출
+  return query
+  with target_tags as (
+    select pt.tag_id
+    from public.prompt_tags pt
+    where pt.prompt_id = target_prompt_id
+  ),
+  similar_scores as (
+select
+      p.id as out_id,
+      p.slug as out_slug,
+      p.title as out_title,
+      p.image_thumbnail_key as out_thumbnail,
+      p.image_preview_key as out_preview,
+      p.category_id as out_category_id,
+      p.sub_option_id as out_sub_option_id,
+      (
+        -- 공통 태그 개수 * 10
+        (count(pt.tag_id) filter (where pt.tag_id in (select tt.tag_id from target_tags tt))) * 10 +
+        -- 동일 sub_option_id 존재 시 +5
+        (case when p.sub_option_id is not null and p.sub_option_id = target_sub_option_id then 5 else 0 end) +
+        -- 동일 category_id 존재 시 +2
+        (case when p.category_id = target_category_id then 2 else 0 end)
+      ) as similarity_score
+    from public.prompts p
+    left join public.prompt_tags pt on p.id = pt.prompt_id
+    where p.id != target_prompt_id
+      and p.status = 'published'
+      and p.published_at <= now()
+      -- 대신 태그가 1개라도 겹치거나 OR 같은 카테고리/서브옵션인 것만 1차 추출해서 속도 보장
+      and (
+        pt.tag_id in (select tt.tag_id from target_tags tt)
+        or p.category_id = target_category_id
+      )
+    group by p.id
+  )
+  select
+    ss.out_id,
+    ss.out_slug,
+    ss.out_title,
+    ss.out_thumbnail,
+    ss.out_preview,
+    ss.out_category_id,
+    ss.out_sub_option_id,
+    ss.similarity_score
+  from similar_scores ss
+  order by
+    ss.similarity_score desc,
+    ss.out_id desc
+  limit limit_count;
+end;
+$$;
+
+grant execute on function public.get_similar_prompts(uuid, integer) to anon, authenticated;

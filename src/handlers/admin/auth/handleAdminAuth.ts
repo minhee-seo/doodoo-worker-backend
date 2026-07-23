@@ -1,8 +1,8 @@
 // src/handlers/handleAdminAuth.ts
 
 import { Env } from '../index';
-import { CORS_HEADERS } from '../lib/constants';
-import { getSupabaseAdminClient } from '../utils/supabaseAdmin';
+import { CORS_HEADERS } from '../../../lib/constants';
+import { getSupabaseAdminClient } from '../../../utils/supabaseAdmin';
 // ... CORS_HEADERS 등 필요한 유틸리티 import
 
 export async function handleAdminAuth(request: Request, env: Env): Promise<Response> {

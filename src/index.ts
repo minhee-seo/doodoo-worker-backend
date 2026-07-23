@@ -14,6 +14,8 @@ import { handleLogout } from './handlers/admin/auth/handleLogout';
 import verifyAdminToken from './lib/auth';
 import { handleSitemapData } from './handlers/handleSitemapData';
 import { handleGetPromptDetail } from './handlers/photo/promptDetail';
+import { handleSimilar } from './handlers/photo/handleSimilar';
+import { handleAdminAuth } from './handlers/admin/auth/handleAdminAuth';
 
 interface Env extends AppEnv {
   PRIVATE_ORIGINALS: R2Bucket;
@@ -111,11 +113,10 @@ export default {
       return handleSearch(request, env);
     }
 
-
-    if (url.pathname === '/api/categories' && request.method === 'GET') {
-      return handleGetCategories(request, env);
+    if (url.pathname === '/api/similar' && request.method === 'GET') {
+      return handleSimilar(request, env);
     }
-    
+
     if (url.pathname.startsWith('/api/prompts/') && request.method === 'GET') {
       const slug = url.pathname.replace('/api/prompts/', '').trim();
       return handleGetPromptDetail(request, env, slug);
