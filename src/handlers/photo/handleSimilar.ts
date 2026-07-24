@@ -18,10 +18,14 @@ export async function handleSimilar(request: Request, env: Env): Promise<Respons
     );
   }
 
+
   // 1. Cloudflare Edge Cache 객체 참조
   const cache = caches.default;
   // URL 자체를 캐시 키로 사용 (쿼리 파라미터 id, lang, limit 구분)
   const cacheKey = new Request(url.toString(), request);
+
+  // 2. Edge Cache 히트 여부 확인
+  let response = await cache.match(cacheKey);
 
   if (response) {
     // 캐시에서 즉시 반환 (DB 호출 0회)
