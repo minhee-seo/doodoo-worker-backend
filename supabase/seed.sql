@@ -1,10 +1,11 @@
 -- 초기 카테고리 등록
 INSERT INTO public.categories (name, slug, sort_order) VALUES
-('마케팅·디자인', 'marketing', 1),
-('브랜딩·목업', 'branding-mockups', 2),
-('타이포그래피', 'typography', 3),
+('마케팅디자인', 'marketing', 1),
+('타이포그래피', 'typography', 2),
+('브랜딩 목업', 'branding-mockups', 3),
 ('일러스트레이션', 'illustration', 4),
-('사진·실사', 'photography', 5)
+('사진실사', 'photography', 5),
+('밈', 'meme', 6)
 ON CONFLICT (slug) DO NOTHING;
 
 -- 초기 태그 등록
